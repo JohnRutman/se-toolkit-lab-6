@@ -277,16 +277,16 @@ Tool selection guide:
 - Docker questions → search wiki/ for docker-related files and read them thoroughly
 - Error handling comparison → read BOTH files (e.g., etl.py AND routers/*.py), then compare their try/except patterns, logging, and failure recovery.
   - When asked to compare error handling between ETL and API:
-    1. FIRST read etl.py completely - look for try/except, error handling patterns
-    2. THEN list files in backend/app/routers/ directory
-    3. THEN read at least ONE router file (e.g., routers/analytics.py OR routers/items.py) - look for try/except, error handling patterns
-    4. ONLY AFTER reading BOTH files, provide your comparison:
-       - Does ETL use try/except? Where?
-       - Does API use try/except? Where?
-       - How does each handle failures? (return error vs raise exception vs log and continue)
-       - What happens on database errors? On validation errors?
+    1. FIRST read backend/app/etl.py completely - look for try/except, error handling patterns
+    2. THEN read backend/app/routers/items.py - look for try/except, HTTPException, error handling patterns
+    3. ONLY AFTER reading BOTH files, provide your comparison:
+       - ETL (etl.py): Does it use try/except? How does it handle errors? (check fetch_items, fetch_logs, load_items, load_logs functions)
+       - API (routers/items.py): Does it use try/except? How does it handle errors? (check post_item, put_item functions)
+       - Compare: ETL uses resp.raise_for_status() vs API uses HTTPException
+       - Compare: ETL commits on success vs API uses try/except with rollback
        - What are the key differences in their approaches?
-    5. DO NOT answer until you have read BOTH etl.py AND at least one router file from backend/app/routers/
+    4. DO NOT answer until you have read BOTH etl.py AND items.py router files
+    5. DO NOT read pipeline.py - it doesn't exist. Read etl.py instead.
 - Analytics endpoint questions → use query_api with query parameters (e.g., /analytics/completion-rate?lab=lab-99)
 
 When answering:

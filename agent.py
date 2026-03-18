@@ -60,24 +60,24 @@ def create_client(api_key: str, api_base: str) -> OpenAI:
 def query_api(method: str, path: str, body: str = None) -> str:
     """
     Call the backend LMS API with authentication.
-    
+
     Args:
         method: HTTP method (GET, POST, etc.)
         path: API path (e.g., '/items/', '/analytics/completion-rate')
         body: Optional JSON request body (for POST/PUT)
-        
+
     Returns:
         JSON string with status_code and body, or error message
     """
     api_key = os.getenv("LMS_API_KEY")
-    base_url = os.getenv("AGENT_API_BASE_URL", "http://localhost:42002")
-    
+    base_url = os.getenv("AGENT_API_BASE_URL", "http://localhost:42001")
+
     if not api_key:
         return json.dumps({"error": "LMS_API_KEY not set"})
-    
+
     url = f"{base_url}{path}"
     headers = {"Authorization": f"Bearer {api_key}"}
-    
+
     try:
         response = httpx.request(method, url, headers=headers, json=body, timeout=30.0)
         return json.dumps({
@@ -278,15 +278,21 @@ When answering:
    - Then read the source file where the error occurs
    - Look specifically for: division operations (/), sorting with None (sorted(), .sort()), missing null checks
    - Explain BOTH what error occurs AND which line/code causes it
-5. For lifecycle questions, trace ALL hops: Caddy (reverse proxy) → FastAPI (app) → authentication → router → ORM/SQLAlchemy → PostgreSQL
-6. For "how many" questions, COUNT the items in the API response array and report the exact number
+5. For lifecycle questions (request path, docker, architecture):
+   - You MUST read ALL of these files: docker-compose.yml, Caddyfile, Dockerfile, main.py
+   - Read them ONE BY ONE in order
+   - Then trace the full path: Caddy (reverse proxy on port 80) → FastAPI app (port 8000) → authentication (LMS_API_KEY) → router → ORM/SQLAlchemy → PostgreSQL
+6. For "how many" questions (how many items, learners, etc.):
+   - Use query_api to get the data
+   - COUNT the items in the response array
+   - Report the EXACT number (e.g., "There are 257 learners")
 7. For comparison questions:
    - Read ALL relevant files first (e.g., BOTH etl.py AND the API router)
    - Compare their approaches: try/except patterns, logging, failure recovery, return values
    - Explain similarities AND differences
 8. Stop calling tools once you have enough information
 
-Maximum 20 tool calls per question. Be thorough - for "list all" and comparison questions, you MUST read every relevant file."""
+Maximum 20 tool calls per question. Be thorough - for "list all", lifecycle, and comparison questions, you MUST read every relevant file."""
 
 
 def execute_tool_call(tool_call) -> dict:

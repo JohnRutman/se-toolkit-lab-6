@@ -259,7 +259,14 @@ Tool selection guide:
 - Source code questions → use read_file on backend/ files
 - Live data questions (how many items, learners, scores) → use query_api, then COUNT the results in the response
 - HTTP status codes → use query_api (may return 401/403 without auth)
-- Bug diagnosis → use query_api first to see the error, then read_file on the error location. When asked about bugs, look for: division operations (ZeroDivisionError), sorting with None values (TypeError), missing null checks.
+- Bug diagnosis → use query_api first to see the error, then read_file on the error location. When asked about bugs or risky operations:
+  - ALWAYS read the full file where the error occurs
+  - Look specifically for: 
+    * Division operations: `/` without checking for zero (ZeroDivisionError)
+    * Sorting with None: `sorted()` or `.sort()` when values might be None (TypeError)
+    * Missing null checks: accessing attributes on potentially None objects
+  - In analytics.py specifically: check the completion-rate endpoint for division, and top-learners for sorting
+  - Explain BOTH what error occurs AND which line/code causes it
 - "List all" questions (e.g., "List all API routers", "What files are in...") → use list_files first, then read EVERY SINGLE file before answering. Do NOT stop after reading just one file!
 - Request lifecycle questions → read ALL of these files: docker-compose.yml, Caddyfile, Dockerfile, and main.py to trace the full path
 - Docker questions → search wiki/ for docker-related files and read them thoroughly

@@ -2,129 +2,224 @@
 
 ## Overview
 
-This project implements an AI-powered agent that answers questions about the Learning Management System (LMS). The agent uses Large Language Models (LLMs) to understand questions and generate accurate responses.
+This project implements an AI-powered agent that answers questions about the Learning Management System (LMS) by reading project documentation. The agent uses Large Language Models (LLMs) with function calling to execute tools and gather information.
 
-## Task 1: Call an LLM from Code
+## Task 2: The Documentation Agent
 
 ### Architecture
 
 ```
 ┌─────────────┐     ┌──────────────┐     ┌─────────────┐
 │  CLI Input  │────▶│   agent.py   │────▶│  LLM API    │
-│  (question) │     │  (OpenAI SDK)│     │  (Qwen)     │
-└─────────────┘     └──────────────┘     └─────────────┘
-                           │
-                           ▼
-                    ┌──────────────┐
-                    │  JSON Output │
-                    │  {answer,    │
-                    │   tool_calls}│
-                    └──────────────┘
+│  (question) │     │  (agentic    │     │  (Qwen)     │
+└─────────────┘     │   loop)      │     └─────────────┘
+                    │      │               │
+                    │      ▼               │
+                    │ ┌─────────────┐      │
+                    │ │   Tools     │◀─────┘
+                    │ │ - read_file │
+                    │ │ - list_files│
+                    │ └─────────────┘
+                    │      │
+                    │      ▼
+                    │ ┌──────────────┐
+                    └▶│  JSON Output │
+                      │ {answer,     │
+                      │  source,     │
+                      │  tool_calls} │
+                      └──────────────┘
 ```
 
-### Components
+### Agentic Loop
 
-**agent.py** - Main CLI script that:
-- Parses command-line arguments (question)
-- Loads environment variables from `.env.agent.secret`
-- Creates an OpenAI-compatible client
-- Sends chat completion requests to the LLM
-- Returns structured JSON output
+The agent implements a reasoning loop:
 
-### LLM Provider
+1. **Send question** - User's question + tool definitions sent to LLM
+2. **LLM decides** - LLM either:
+   - Returns `tool_calls` → execute tools, append results, go to step 1
+   - Returns text answer → output JSON and exit
+3. **Maximum 10 iterations** - Prevents infinite loops
 
-**Qwen Code API** (self-hosted on VM)
-- **Model:** `qwen3-coder-plus`
-- **API Base:** `http://10.93.25.200:42005/v1`
-- **Benefits:** 1000 free requests/day, works from Russia, no credit card required
+```python
+while iteration < MAX_TOOL_CALLS:
+    response = client.chat.completions.create(
+        model=model,
+        messages=messages,
+        tools=TOOLS,
+    )
 
-### Environment Variables
+    if response.tool_calls:
+        # Execute tools and continue
+    else:
+        # Return final answer
+```
 
-Stored in `.env.agent.secret` (gitignored):
+### Tools
 
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `LLM_API_KEY` | API key for authentication | `my-secret-qwen-key` |
-| `LLM_API_BASE` | Base URL of the LLM API | `http://10.93.25.200:42005/v1` |
-| `LLM_MODEL` | Model name to use | `qwen3-coder-plus` |
+#### `read_file`
+
+Read a file from the project repository.
+
+**Parameters:**
+
+- `path` (string): Relative path from project root (e.g., `wiki/git-workflow.md`)
+
+**Returns:** File contents as string, or error message
+
+**Security:**
+
+- Rejects paths containing `..` (directory traversal)
+- Rejects absolute paths
+- Only allows files within project root
+
+#### `list_files`
+
+List files and directories at a given path.
+
+**Parameters:**
+
+- `path` (string): Relative directory path from project root (e.g., `wiki`)
+
+**Returns:** Newline-separated listing of entries, or error message
+
+**Security:**
+
+- Same path validation as `read_file`
+- Only allows directories within project root
+
+### Tool Schemas
+
+Tools are defined as OpenAI-compatible function schemas:
+
+```json
+{
+  "type": "function",
+  "function": {
+    "name": "read_file",
+    "description": "Read a file from the project repository...",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "path": { "type": "string", "description": "..." }
+      },
+      "required": ["path"]
+    }
+  }
+}
+```
+
+### System Prompt
+
+The system prompt instructs the LLM how to use tools:
+
+```
+You are a helpful assistant that answers questions about this software project
+by reading the project documentation.
+
+You have access to two tools:
+- list_files: List files and directories in a directory.
+- read_file: Read the contents of a file.
+
+When answering questions about the project:
+1. First use list_files to discover relevant files (e.g., in the wiki/ directory)
+2. Then use read_file to read specific files and find the answer
+3. Always include a source reference in your answer
+4. Stop calling tools once you have enough information
+
+Maximum 10 tool calls per question.
+```
+
+### Output Format
+
+```json
+{
+  "answer": "Edit the conflicting file, choose which changes to keep, then stage and commit.",
+  "source": "wiki/git-workflow.md#resolving-merge-conflicts",
+  "tool_calls": [
+    {
+      "tool": "list_files",
+      "args": { "path": "wiki" },
+      "result": "git-workflow.md\n..."
+    },
+    {
+      "tool": "read_file",
+      "args": { "path": "wiki/git-workflow.md" },
+      "result": "...content..."
+    }
+  ]
+}
+```
+
+- `answer` (string): The LLM's final answer
+- `source` (string): Reference to the wiki section (e.g., `wiki/file.md#anchor`)
+- `tool_calls` (array): All tool calls made during the agentic loop
 
 ### Usage
 
 ```bash
 # Run the agent with a question
-uv run agent.py "What does REST stand for?"
+uv run agent.py "How do you resolve a merge conflict?"
 
 # Output (JSON to stdout)
-{"answer": "Representational State Transfer.", "tool_calls": []}
-```
-
-### Output Format
-
-The agent outputs a single JSON line to stdout:
-
-```json
 {
-  "answer": "The answer from the LLM",
-  "tool_calls": []
+  "answer": "...",
+  "source": "wiki/git-workflow.md#resolving-merge-conflicts",
+  "tool_calls": [...]
 }
 ```
 
-- `answer` (string): The LLM's response to the question
-- `tool_calls` (array): Empty for Task 1 (will be populated in Task 2+)
+### Path Security
 
-### Error Handling
+The agent validates all file paths to prevent directory traversal attacks:
 
-- Missing question argument → prints usage to stderr, exits with code 1
-- API errors → prints error to stderr, exits with code 1
-- All debug output goes to stderr, only valid JSON goes to stdout
+```python
+def validate_path(path: str) -> tuple[bool, str]:
+    # Reject empty paths
+    # Reject absolute paths
+    # Reject paths containing ".."
+    # Ensure resolved path is within project root
+```
 
-### Dependencies
+### LLM Provider
 
-- `openai` - OpenAI Python SDK (compatible with OpenAI-compatible APIs)
-- `python-dotenv` - Load environment variables from `.env` file
+**Qwen Code API** (self-hosted on VM)
+
+- **Model:** `qwen3-coder-plus`
+- **API Base:** `http://10.93.25.200:42005/v1`
+- **Benefits:** 1000 free requests/day, OpenAI-compatible function calling
+
+### Environment Variables
+
+Stored in `.env.agent.secret` (gitignored):
+
+| Variable       | Description                | Example                        |
+| -------------- | -------------------------- | ------------------------------ |
+| `LLM_API_KEY`  | API key for authentication | `my-secret-qwen-key`           |
+| `LLM_API_BASE` | Base URL of the LLM API    | `http://10.93.25.200:42005/v1` |
+| `LLM_MODEL`    | Model name to use          | `qwen3-coder-plus`             |
 
 ### Testing
 
-Run the regression test:
+Run the regression tests:
 
 ```bash
-uv run pytest tests/test_task1.py -v
+uv run pytest tests/test_task2.py -v
 ```
 
-## Future Tasks
+Tests verify:
 
-### Task 2: Add Tools
+- `read_file` is called when asked about documentation
+- `list_files` is called when asked about available files
+- `source` field contains wiki file reference
+- `tool_calls` array is populated
 
-The agent will gain access to tools:
-- `read_file` - Read project documentation
-- `query_api` - Query the backend LMS API
+### Future Tasks
 
-### Task 3: Agentic Loop
+#### Task 3: Agentic Loop with More Tools
 
-The agent will implement a reasoning loop:
-1. Receive question
-2. Decide which tools to use
-3. Execute tools and gather information
-4. Generate final answer
+Add more tools:
 
-## Qwen Code API Setup
+- `query_api` - Query the backend LMS API for data-dependent questions
+- Enhanced system prompt for multi-step reasoning
 
-The Qwen Code API is deployed on the VM at `10.93.25.200:42005`.
-
-### Deployment Steps
-
-1. Install Node.js and pnpm on VM
-2. Install Qwen Code CLI: `npm install -g @qwen-code/qwen-code`
-3. Authenticate: `qwen` → `/auth`
-4. Clone qwen-code-oai-proxy: `git clone https://github.com/inno-se-toolkit/qwen-code-oai-proxy`
-5. Configure `.env` with API key
-6. Run: `docker compose up --build -d`
-
-### Testing the API
-
-```bash
-curl -s http://10.93.25.200:42005/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer my-secret-qwen-key" \
-  -d '{"model":"qwen3-coder-plus","messages":[{"role":"user","content":"What is 2+2?"}]}'
-```
+The agent will handle complex questions requiring multiple tool chains.

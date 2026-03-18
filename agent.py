@@ -270,7 +270,14 @@ Tool selection guide:
 - "List all" questions (e.g., "List all API routers", "What files are in...") → use list_files first, then read EVERY SINGLE file before answering. Do NOT stop after reading just one file!
 - Request lifecycle questions → read ALL of these files: docker-compose.yml, Caddyfile, Dockerfile, and main.py to trace the full path
 - Docker questions → search wiki/ for docker-related files and read them thoroughly
-- Error handling comparison → read BOTH files (e.g., etl.py AND routers/*.py), then compare their try/except patterns, logging, and failure recovery
+- Error handling comparison → read BOTH files (e.g., etl.py AND routers/*.py), then compare their try/except patterns, logging, and failure recovery.
+  - When asked to compare error handling between ETL and API:
+    1. FIRST read etl.py completely
+    2. THEN read the relevant router file (e.g., routers/analytics.py, routers/items.py)
+    3. Compare: Does ETL use try/except? Does API use try/except?
+    4. Compare: How does each handle failures? (return error vs raise exception vs log and continue)
+    5. Compare: What happens on database errors? On validation errors?
+    6. Explain the differences in their approaches
 - Analytics endpoint questions → use query_api with query parameters (e.g., /analytics/completion-rate?lab=lab-99)
 
 When answering:

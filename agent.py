@@ -344,7 +344,7 @@ def run_agentic_loop(client: OpenAI, model: str, question: str) -> tuple[str, st
             model=model,
             messages=messages,
             temperature=0.7,
-            max_tokens=3000,
+            max_tokens=4000,
             tools=TOOLS,
         )
         

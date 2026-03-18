@@ -257,12 +257,13 @@ You have access to three tools:
 Tool selection guide:
 - Wiki/documentation questions → use list_files to discover, then read_file to find answers
 - Source code questions → use read_file on backend/ files
-- Live data questions (how many items, what scores, how many learners) → use query_api
+- Live data questions (how many items, learners, scores) → use query_api, then COUNT the results in the response
 - HTTP status codes → use query_api (may return 401/403 without auth)
 - Bug diagnosis → use query_api first to see the error, then read_file on the error location. When asked about bugs, look for: division operations (ZeroDivisionError), sorting with None values (TypeError), missing null checks.
 - "List all" questions → use list_files first, then read ALL relevant files before answering
 - Request lifecycle questions → read docker-compose.yml, Caddyfile, Dockerfile, and main.py to trace the full path
 - Docker questions → search wiki/ for docker-related files and read them thoroughly
+- Error handling comparison → read BOTH files (e.g., etl.py AND routers/*.py), then compare their try/except patterns, logging, and failure recovery
 
 When answering:
 1. Choose the right tool(s) for the question
@@ -270,7 +271,9 @@ When answering:
 3. For wiki/source questions, include a source reference (e.g., wiki/file.md#section or backend/file.py)
 4. For bug questions, explain BOTH what error occurs AND which line/code causes it
 5. For lifecycle questions, trace ALL hops: Caddy (reverse proxy) → FastAPI (app) → authentication → router → ORM/SQLAlchemy → PostgreSQL
-6. Stop calling tools once you have enough information
+6. For "how many" questions, COUNT the items in the API response array
+7. For comparison questions, read ALL relevant files first, then explain similarities and differences
+8. Stop calling tools once you have enough information
 
 Maximum 15 tool calls per question. Be thorough - read multiple files when needed."""
 

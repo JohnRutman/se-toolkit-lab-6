@@ -10,7 +10,7 @@ FROM harbor.pg.innopolis.university/docker-hub-cache/node:25-alpine AS builder
 WORKDIR /app
 
 COPY package.json pnpm-lock.yaml ./
-RUN npm install -g pnpm
+RUN npm config set registry https://registry.npmmirror.com && npm install -g pnpm
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
 
 COPY . .

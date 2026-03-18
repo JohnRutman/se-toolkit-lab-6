@@ -130,7 +130,7 @@ def _run_agent(question: str, timeout: int = 60) -> tuple[AgentOutput, None] | t
     """Run agent.py with the question. Returns (answer_dict, error_msg)."""
     try:
         result = subprocess.run(
-            [sys.executable, "agent.py", question],
+            ["uv", "run", "agent.py", question],
             capture_output=True,
             text=True,
             timeout=timeout,

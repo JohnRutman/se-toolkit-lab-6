@@ -267,6 +267,11 @@ Tool selection guide:
     * Missing null checks: accessing attributes on potentially None objects
   - In analytics.py specifically: check the completion-rate endpoint for division, and top-learners for sorting
   - Explain BOTH what error occurs AND which line/code causes it
+  - CRITICAL: When asked "which operations are risky" or "which endpoints have bugs":
+    1. Read the ENTIRE analytics.py file
+    2. Search for ALL division operations (/) - these can cause ZeroDivisionError
+    3. Search for ALL sorting operations (sorted(), .sort()) - these can fail with None
+    4. List EACH risky operation you find with its line number and explanation
 - "List all" questions (e.g., "List all API routers", "What files are in...") → use list_files first, then read EVERY SINGLE file before answering. Do NOT stop after reading just one file!
 - Request lifecycle questions → read ALL of these files: docker-compose.yml, Caddyfile, Dockerfile, and main.py to trace the full path
 - Docker questions → search wiki/ for docker-related files and read them thoroughly

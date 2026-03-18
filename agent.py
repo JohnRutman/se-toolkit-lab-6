@@ -261,9 +261,10 @@ Tool selection guide:
 - HTTP status codes → use query_api (may return 401/403 without auth)
 - Bug diagnosis → use query_api first to see the error, then read_file on the error location. When asked about bugs, look for: division operations (ZeroDivisionError), sorting with None values (TypeError), missing null checks.
 - "List all" questions (e.g., "List all API routers", "What files are in...") → use list_files first, then read EVERY SINGLE file before answering. Do NOT stop after reading just one file!
-- Request lifecycle questions → read docker-compose.yml, Caddyfile, Dockerfile, and main.py to trace the full path
+- Request lifecycle questions → read ALL of these files: docker-compose.yml, Caddyfile, Dockerfile, and main.py to trace the full path
 - Docker questions → search wiki/ for docker-related files and read them thoroughly
 - Error handling comparison → read BOTH files (e.g., etl.py AND routers/*.py), then compare their try/except patterns, logging, and failure recovery
+- Analytics endpoint questions → use query_api with query parameters (e.g., /analytics/completion-rate?lab=lab-99)
 
 When answering:
 1. Choose the right tool(s) for the question
@@ -272,13 +273,20 @@ When answering:
    - Then read EVERY file in that list
    - Only then provide your final answer summarizing ALL files
 3. For wiki/source questions, include a source reference (e.g., wiki/file.md#section or backend/file.py)
-4. For bug questions, explain BOTH what error occurs AND which line/code causes it
+4. For bug questions:
+   - First query the API to see the actual error
+   - Then read the source file where the error occurs
+   - Look specifically for: division operations (/), sorting with None (sorted(), .sort()), missing null checks
+   - Explain BOTH what error occurs AND which line/code causes it
 5. For lifecycle questions, trace ALL hops: Caddy (reverse proxy) → FastAPI (app) → authentication → router → ORM/SQLAlchemy → PostgreSQL
-6. For "how many" questions, COUNT the items in the API response array
-7. For comparison questions, read ALL relevant files first, then explain similarities and differences
+6. For "how many" questions, COUNT the items in the API response array and report the exact number
+7. For comparison questions:
+   - Read ALL relevant files first (e.g., BOTH etl.py AND the API router)
+   - Compare their approaches: try/except patterns, logging, failure recovery, return values
+   - Explain similarities AND differences
 8. Stop calling tools once you have enough information
 
-Maximum 20 tool calls per question. Be thorough - for "list all" questions, you MUST read every file."""
+Maximum 20 tool calls per question. Be thorough - for "list all" and comparison questions, you MUST read every relevant file."""
 
 
 def execute_tool_call(tool_call) -> dict:

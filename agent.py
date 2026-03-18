@@ -20,7 +20,7 @@ from openai import OpenAI
 PROJECT_ROOT = Path(__file__).parent
 
 # Maximum tool calls per question
-MAX_TOOL_CALLS = 15
+MAX_TOOL_CALLS = 20
 
 
 def load_env():
@@ -252,7 +252,7 @@ def get_system_prompt() -> str:
 You have access to three tools:
 - list_files: List files and directories in a directory. Use this to discover what files are available.
 - read_file: Read the contents of a file. Use this to read documentation (wiki/), source code (backend/), or configuration files.
-- query_api: Call the backend LMS API. Use this for data-dependent questions (item counts, scores, analytics) or checking HTTP status codes.
+- query_api: Call the backend LMS API. Use this for data-dependent questions (item counts, learner counts, scores, analytics) or checking HTTP status codes.
 
 Tool selection guide:
 - Wiki/documentation questions → use list_files to discover, then read_file to find answers
@@ -260,14 +260,17 @@ Tool selection guide:
 - Live data questions (how many items, learners, scores) → use query_api, then COUNT the results in the response
 - HTTP status codes → use query_api (may return 401/403 without auth)
 - Bug diagnosis → use query_api first to see the error, then read_file on the error location. When asked about bugs, look for: division operations (ZeroDivisionError), sorting with None values (TypeError), missing null checks.
-- "List all" questions → use list_files first, then read ALL relevant files before answering
+- "List all" questions (e.g., "List all API routers", "What files are in...") → use list_files first, then read EVERY SINGLE file before answering. Do NOT stop after reading just one file!
 - Request lifecycle questions → read docker-compose.yml, Caddyfile, Dockerfile, and main.py to trace the full path
 - Docker questions → search wiki/ for docker-related files and read them thoroughly
 - Error handling comparison → read BOTH files (e.g., etl.py AND routers/*.py), then compare their try/except patterns, logging, and failure recovery
 
 When answering:
 1. Choose the right tool(s) for the question
-2. For "list all" questions, read ALL relevant files before providing the final answer
+2. For "list all" questions: 
+   - First use list_files to get the complete list
+   - Then read EVERY file in that list
+   - Only then provide your final answer summarizing ALL files
 3. For wiki/source questions, include a source reference (e.g., wiki/file.md#section or backend/file.py)
 4. For bug questions, explain BOTH what error occurs AND which line/code causes it
 5. For lifecycle questions, trace ALL hops: Caddy (reverse proxy) → FastAPI (app) → authentication → router → ORM/SQLAlchemy → PostgreSQL
@@ -275,7 +278,7 @@ When answering:
 7. For comparison questions, read ALL relevant files first, then explain similarities and differences
 8. Stop calling tools once you have enough information
 
-Maximum 15 tool calls per question. Be thorough - read multiple files when needed."""
+Maximum 20 tool calls per question. Be thorough - for "list all" questions, you MUST read every file."""
 
 
 def execute_tool_call(tool_call) -> dict:

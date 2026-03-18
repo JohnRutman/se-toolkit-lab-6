@@ -203,23 +203,49 @@ Stored in `.env.agent.secret` (gitignored):
 Run the regression tests:
 
 ```bash
-uv run pytest tests/test_task2.py -v
+uv run pytest tests/test_task2.py -v  # Task 2 tests
+uv run pytest tests/test_task3.py -v  # Task 3 tests
+uv run run_eval.py                    # Full benchmark (10 questions)
 ```
 
 Tests verify:
 
 - `read_file` is called when asked about documentation
 - `list_files` is called when asked about available files
-- `source` field contains wiki file reference
+- `query_api` is called for data-dependent questions
+- `source` field contains file reference
 - `tool_calls` array is populated
+
+### Benchmark Results
+
+**Current Score: 3/10 (30%)**
+
+The agent passes wiki-based questions (1-3) but struggles with:
+
+- Multi-file analysis (question 4) - LLM stops after reading one file
+- Unauthenticated API requests (question 5) - `query_api` always sends auth
+- Questions requiring ETL pipeline data (6-7) - database is empty
+- LLM-judged reasoning questions (8-9) - needs more comprehensive answers
+
+### Lessons Learned
+
+1. **Tool Descriptions Matter**: The LLM needs clear guidance on when to use each tool. Explicit instructions like "read ALL files" for "list all" questions help but aren't always followed.
+
+2. **Token Limits**: Increasing `max_tokens` from 1000 to 3000 improved answer completeness but didn't solve the multi-file reading problem.
+
+3. **Authentication Design**: Having `query_api` always send `LMS_API_KEY` simplifies most cases but breaks questions that specifically test unauthenticated access.
+
+4. **Environment Variables**: Reading from both `.env.agent.secret` (LLM config) and `.env.docker.secret` (backend config) is essential for the agent to work correctly.
+
+5. **Source Extraction**: The `extract_source()` function now checks tool calls if no source is found in the answer text, improving reliability.
+
+6. **Iteration is Key**: Building an effective agent requires multiple iterations of prompt tuning, tool refinement, and testing against real questions.
 
 ### Future Tasks
 
-#### Task 3: Agentic Loop with More Tools
+#### Task 3 Improvements
 
-Add more tools:
-
-- `query_api` - Query the backend LMS API for data-dependent questions
-- Enhanced system prompt for multi-step reasoning
-
-The agent will handle complex questions requiring multiple tool chains.
+- Split `query_api` into authenticated and unauthenticated variants
+- Implement batch file reading for "list all" questions
+- Add ETL pipeline to populate test data
+- Improve LLM judge responses with more detailed reasoning

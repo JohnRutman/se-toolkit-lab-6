@@ -11,6 +11,7 @@ import os
 import sys
 from pathlib import Path
 
+import httpx
 from dotenv import load_dotenv
 from openai import OpenAI
 
@@ -19,16 +20,20 @@ from openai import OpenAI
 PROJECT_ROOT = Path(__file__).parent
 
 # Maximum tool calls per question
-MAX_TOOL_CALLS = 10
+MAX_TOOL_CALLS = 15
 
 
 def load_env():
-    """Load environment variables from .env.agent.secret"""
-    env_path = PROJECT_ROOT / ".env.agent.secret"
-    if not env_path.exists():
-        print(f"Error: {env_path} not found", file=sys.stderr)
-        sys.exit(1)
-    load_dotenv(env_path)
+    """Load environment variables from .env.agent.secret and .env.docker.secret"""
+    # Load LLM config from .env.agent.secret
+    agent_env_path = PROJECT_ROOT / ".env.agent.secret"
+    if agent_env_path.exists():
+        load_dotenv(agent_env_path)
+    
+    # Load LMS API config from .env.docker.secret
+    docker_env_path = PROJECT_ROOT / ".env.docker.secret"
+    if docker_env_path.exists():
+        load_dotenv(docker_env_path, override=False)  # Don't override existing
 
 
 def get_llm_config():
@@ -50,6 +55,37 @@ def get_llm_config():
 def create_client(api_key: str, api_base: str) -> OpenAI:
     """Create OpenAI-compatible client"""
     return OpenAI(api_key=api_key, base_url=api_base)
+
+
+def query_api(method: str, path: str, body: str = None) -> str:
+    """
+    Call the backend LMS API with authentication.
+    
+    Args:
+        method: HTTP method (GET, POST, etc.)
+        path: API path (e.g., '/items/', '/analytics/completion-rate')
+        body: Optional JSON request body (for POST/PUT)
+        
+    Returns:
+        JSON string with status_code and body, or error message
+    """
+    api_key = os.getenv("LMS_API_KEY")
+    base_url = os.getenv("AGENT_API_BASE_URL", "http://localhost:42002")
+    
+    if not api_key:
+        return json.dumps({"error": "LMS_API_KEY not set"})
+    
+    url = f"{base_url}{path}"
+    headers = {"Authorization": f"Bearer {api_key}"}
+    
+    try:
+        response = httpx.request(method, url, headers=headers, json=body, timeout=30.0)
+        return json.dumps({
+            "status_code": response.status_code,
+            "body": response.text
+        })
+    except Exception as e:
+        return json.dumps({"error": str(e)})
 
 
 def validate_path(path: str) -> tuple[bool, str]:
@@ -143,13 +179,13 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "read_file",
-            "description": "Read a file from the project repository. Use this to read documentation files in the wiki/ directory.",
+            "description": "Read a file from the project repository. Use this to read documentation files in the wiki/ directory or source code in backend/.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "path": {
                         "type": "string",
-                        "description": "Relative path from project root (e.g., 'wiki/git-workflow.md')"
+                        "description": "Relative path from project root (e.g., 'wiki/git-workflow.md' or 'backend/app/api/items.py')"
                     }
                 },
                 "required": ["path"]
@@ -166,10 +202,36 @@ TOOLS = [
                 "properties": {
                     "path": {
                         "type": "string",
-                        "description": "Relative directory path from project root (e.g., 'wiki')"
+                        "description": "Relative directory path from project root (e.g., 'wiki' or 'backend/app/api')"
                     }
                 },
                 "required": ["path"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "query_api",
+            "description": "Call the backend LMS API. Use this for data-dependent questions like item counts, scores, analytics, or checking HTTP status codes. Requires authentication.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "method": {
+                        "type": "string",
+                        "description": "HTTP method (GET, POST, PUT, DELETE, PATCH)",
+                        "enum": ["GET", "POST", "PUT", "DELETE", "PATCH"]
+                    },
+                    "path": {
+                        "type": "string",
+                        "description": "API path (e.g., '/items/', '/analytics/completion-rate', '/analytics/top-learners')"
+                    },
+                    "body": {
+                        "type": "string",
+                        "description": "Optional JSON request body for POST/PUT requests"
+                    }
+                },
+                "required": ["method", "path"]
             }
         }
     }
@@ -179,24 +241,34 @@ TOOLS = [
 TOOL_FUNCTIONS = {
     "read_file": read_file,
     "list_files": list_files,
+    "query_api": query_api,
 }
 
 
 def get_system_prompt() -> str:
     """Get the system prompt for the agent"""
-    return """You are a helpful assistant that answers questions about this software project by reading the project documentation.
+    return """You are a helpful assistant that answers questions about this software project by reading documentation, source code, and querying the live API.
 
-You have access to two tools:
+You have access to three tools:
 - list_files: List files and directories in a directory. Use this to discover what files are available.
-- read_file: Read the contents of a file. Use this to read documentation files and find answers.
+- read_file: Read the contents of a file. Use this to read documentation (wiki/), source code (backend/), or configuration files.
+- query_api: Call the backend LMS API. Use this for data-dependent questions (item counts, scores, analytics) or checking HTTP status codes.
 
-When answering questions about the project:
-1. First use list_files to discover relevant files (e.g., in the wiki/ directory)
-2. Then use read_file to read specific files and find the answer
-3. Always include a source reference in your answer in the format: wiki/filename.md#section-anchor
-4. Stop calling tools once you have enough information to answer the question
+Tool selection guide:
+- Wiki/documentation questions → use list_files to discover, then read_file to find answers
+- Source code questions → use read_file on backend/ files
+- Live data questions (how many items, what scores) → use query_api
+- HTTP status codes → use query_api (may return 401/403 without auth)
+- Bug diagnosis → use query_api first to see the error, then read_file on the error location
+- "List all" questions → use list_files first, then read ALL relevant files before answering
 
-Maximum 10 tool calls per question. Be efficient and only call tools when needed."""
+When answering:
+1. Choose the right tool(s) for the question
+2. For "list all" questions, read ALL relevant files before providing the final answer
+3. For wiki/source questions, include a source reference (e.g., wiki/file.md#section or backend/file.py)
+4. Stop calling tools once you have enough information
+
+Maximum 10 tool calls per question. Be efficient but thorough."""
 
 
 def execute_tool_call(tool_call) -> dict:
@@ -262,7 +334,7 @@ def run_agentic_loop(client: OpenAI, model: str, question: str) -> tuple[str, st
             model=model,
             messages=messages,
             temperature=0.7,
-            max_tokens=1000,
+            max_tokens=3000,
             tools=TOOLS,
         )
         
@@ -298,8 +370,8 @@ def run_agentic_loop(client: OpenAI, model: str, question: str) -> tuple[str, st
             print(f"LLM provided final answer", file=sys.stderr)
             answer = assistant_message.content
             
-            # Try to extract source from the answer
-            source = extract_source(answer)
+            # Try to extract source from the answer or tool calls
+            source = extract_source(answer, tool_calls_log)
             
             return answer, source, tool_calls_log
     
@@ -319,20 +391,39 @@ def run_agentic_loop(client: OpenAI, model: str, question: str) -> tuple[str, st
     return answer, source, tool_calls_log
 
 
-def extract_source(answer: str) -> str:
+def extract_source(answer: str, tool_calls: list = None) -> str:
     """
-    Try to extract a source reference from the answer.
-    Looks for patterns like wiki/filename.md or wiki/filename.md#anchor
+    Try to extract a source reference from the answer or tool calls.
+    Looks for patterns like wiki/filename.md, backend/filename.py, or file paths.
     """
     import re
-    
-    # Look for wiki file references
-    pattern = r"(wiki/[\w\-/]+\.md(?:#[\w\-]+)?)"
-    match = re.search(pattern, answer)
-    
-    if match:
-        return match.group(1)
-    
+
+    # First try to find source from the answer text
+    patterns = [
+        r"(wiki/[\w\-/]+\.md(?:#[\w\-]+)?)",  # wiki files
+        r"(backend/[\w\-/]+\.py)",  # backend Python files
+        r"([\w\-/]+\.md(?:#[\w\-]+)?)",  # any .md file
+        r"([\w\-/]+\.py)",  # any .py file
+        r"(docker-compose\.yml)",  # docker-compose.yml
+        r"(Dockerfile)",  # Dockerfile
+    ]
+
+    for pattern in patterns:
+        match = re.search(pattern, answer)
+        if match:
+            return match.group(1)
+
+    # If not found in answer, try to get from tool calls
+    if tool_calls:
+        for tc in tool_calls:
+            tool_name = tc.get("tool", "")
+            args = tc.get("args", {})
+            path = args.get("path", "")
+
+            if tool_name == "read_file" and path:
+                # Return the last file read
+                return path
+
     return ""
 
 

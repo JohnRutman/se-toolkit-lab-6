@@ -410,7 +410,7 @@ def extract_source(answer: str, tool_calls: list = None) -> str:
 
     # First try to find source from the answer text
     patterns = [
-        r"(wiki/[\w\-/]+\.md(?:#[\w\-]+)?)",  # wiki files
+        r"(wiki/[\w\-/]+\.md(?:#[\w\-]+)?)",  # wiki files with path
         r"(backend/[\w\-/]+\.py)",  # backend Python files
         r"([\w\-/]+\.md(?:#[\w\-]+)?)",  # any .md file
         r"([\w\-/]+\.py)",  # any .py file
@@ -421,7 +421,11 @@ def extract_source(answer: str, tool_calls: list = None) -> str:
     for pattern in patterns:
         match = re.search(pattern, answer)
         if match:
-            return match.group(1)
+            source = match.group(1)
+            # If it's a bare filename like "github.md", prepend "wiki/"
+            if source and '/' not in source and source.endswith('.md'):
+                return f"wiki/{source}"
+            return source
 
     # If not found in answer, try to get from tool calls
     if tool_calls:
@@ -431,7 +435,7 @@ def extract_source(answer: str, tool_calls: list = None) -> str:
             path = args.get("path", "")
 
             if tool_name == "read_file" and path:
-                # Return the last file read
+                # Return the last file read (already has full path)
                 return path
 
     return ""

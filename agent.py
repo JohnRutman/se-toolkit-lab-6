@@ -278,14 +278,15 @@ Tool selection guide:
 - Error handling comparison → read BOTH files (e.g., etl.py AND routers/*.py), then compare their try/except patterns, logging, and failure recovery.
   - When asked to compare error handling between ETL and API:
     1. FIRST read etl.py completely - look for try/except, error handling patterns
-    2. THEN read at least ONE router file (e.g., routers/analytics.py OR routers/items.py) - look for try/except, error handling patterns
-    3. ONLY AFTER reading BOTH files, provide your comparison:
+    2. THEN list files in backend/app/routers/ directory
+    3. THEN read at least ONE router file (e.g., routers/analytics.py OR routers/items.py) - look for try/except, error handling patterns
+    4. ONLY AFTER reading BOTH files, provide your comparison:
        - Does ETL use try/except? Where?
        - Does API use try/except? Where?
        - How does each handle failures? (return error vs raise exception vs log and continue)
        - What happens on database errors? On validation errors?
        - What are the key differences in their approaches?
-    4. DO NOT answer until you have read BOTH etl.py AND at least one router file
+    5. DO NOT answer until you have read BOTH etl.py AND at least one router file from backend/app/routers/
 - Analytics endpoint questions → use query_api with query parameters (e.g., /analytics/completion-rate?lab=lab-99)
 
 When answering:
